@@ -61,36 +61,53 @@ impl SlowQueryEntry {
     /// Writes the contents of the struct as a single record to a CSV writer.
     /// This function also performs the logic to split the query column.
     fn write_to_csv<W: Write>(&self, wtr: &mut Writer<W>) -> Result<(), Box<dyn Error>> {
-        let mut remaining_query = self.query.clone();
+        // Use string slices to avoid unnecessary clones
+        let query = &self.query;
 
         // 1. Extract 'SET timestamp' statement if it exists.
-        let set_timestamp_str = if let Some(mat) = RE_SET_TIMESTAMP_EXTRACT.find(&remaining_query) {
-            // Create an owned copy of the matched text.
-            let extracted_text = mat.as_str().trim().to_string();
-            // Now that we have our copy, create a new version of `remaining_query`
-            // without the matched part. The borrow from `mat` is no longer needed.
-            remaining_query = remaining_query.replacen(mat.as_str(), "", 1);
-            extracted_text
+        let set_timestamp_str = if let Some(mat) = RE_SET_TIMESTAMP_EXTRACT.find(query) {
+            mat.as_str().trim().to_string()
         } else {
             String::new()
         };
 
         // 2. Extract 'use schema' statement if it exists.
-        let use_schema_str = if let Some(mat) = RE_USE_SCHEMA_EXTRACT.find(&remaining_query) {
-            let extracted_text = mat.as_str().trim().to_string();
-            remaining_query = remaining_query.replacen(mat.as_str(), "", 1);
-            extracted_text
+        let use_schema_str = if let Some(mat) = RE_USE_SCHEMA_EXTRACT.find(query) {
+            mat.as_str().trim().to_string()
         } else {
             String::new()
         };
 
-        // 3. Process the remaining query: trim each line and join with spaces.
-        let single_line_query = remaining_query
-            .lines()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
+        // 3. Process the query: extract remaining content after removing extracted statements
+        let mut single_line_query = String::with_capacity(query.len());
+        let mut remaining_query = query.to_string();
+
+        // Remove SET timestamp statement if found
+        if let Some(mat) = RE_SET_TIMESTAMP_EXTRACT.find(&remaining_query) {
+            let before = &remaining_query[..mat.start()];
+            let after = &remaining_query[mat.end()..];
+            remaining_query = format!("{}{}", before, after);
+        }
+
+        // Remove USE schema statement if found
+        if let Some(mat) = RE_USE_SCHEMA_EXTRACT.find(&remaining_query) {
+            let before = &remaining_query[..mat.start()];
+            let after = &remaining_query[mat.end()..];
+            remaining_query = format!("{}{}", before, after);
+        }
+
+        // Process remaining query: single pass with minimal allocations
+        let mut first = true;
+        for line in remaining_query.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                if !first {
+                    single_line_query.push(' ');
+                }
+                single_line_query.push_str(trimmed);
+                first = false;
+            }
+        }
 
         wtr.write_record(&[
             &self.time,
@@ -162,12 +179,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             eprintln!("Output file: {}", path.display());
             Box::new(File::create(path)?)
         }
-        None => {
-            if !is_stdout {
-                eprintln!("Outputting to stdout.");
-            }
-            Box::new(std::io::stdout())
-        }
+        None => Box::new(std::io::stdout()),
     };
 
     let input_file = File::open(&args.input)?;
@@ -240,6 +252,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 caps.get(1).map_or(0, |m| m.as_str().parse().unwrap_or(0));
             current_entry.bytes_sent = caps.get(2).map_or(0, |m| m.as_str().parse().unwrap_or(0));
         } else if !line.starts_with('#') && !line.trim().is_empty() {
+            // Pre-allocate capacity for better performance
+            if current_entry.query.is_empty() {
+                current_entry.query.reserve(line.len() + 1);
+            }
             current_entry.query.push_str(&line);
             current_entry.query.push('\n');
         }
