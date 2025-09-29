@@ -94,8 +94,15 @@ jobs:
             fi
           done
 
+      - name: Debug artifacts
+        run: |
+          echo "Artifacts structure:"
+          find artifacts -type f -name "*slow-query-converter*" | head -20
+          echo "File sizes:"
+          ls -la artifacts/*/slow-query-converter* 2>/dev/null || echo "No files found"
+
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.0.1
         with:
           tag_name: ${{ github.ref_name }}
           name: MariaDB Slow Query to CSV Converter ${{ github.ref_name }}
@@ -146,5 +153,6 @@ jobs:
             artifacts/*/slow-query-converter*.sha256
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
