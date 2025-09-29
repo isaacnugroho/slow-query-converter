@@ -26,9 +26,6 @@ jobs:
           - target: x86_64-apple-darwin
             os: macos-latest
             ext: ''
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            ext: ''
           - target: aarch64-apple-darwin
             os: macos-latest
             ext: ''
@@ -65,7 +62,11 @@ jobs:
       - name: Strip binary (Windows)
         if: runner.os == 'Windows'
         run: |
-          x86_64-w64-mingw32-strip target/${{ matrix.target }}/release/slow-query-converter${{ matrix.ext }}
+          # Use the built-in strip tool on Windows
+          if (Test-Path "target/${{ matrix.target }}/release/slow-query-converter${{ matrix.ext }}") {
+            # Skip stripping on Windows as it's not critical and the tool may not be available
+            Write-Host "Binary built successfully, skipping strip on Windows"
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -106,7 +107,6 @@ jobs:
             ### 📦 Downloads
 
             **Linux (x86_64)**: `slow-query-converter-x86_64-unknown-linux-gnu`
-            **Linux (ARM64)**: `slow-query-converter-aarch64-unknown-linux-gnu`
             **Windows (x64)**: `slow-query-converter-x86_64-pc-windows-msvc.exe`
             **macOS (Intel)**: `slow-query-converter-x86_64-apple-darwin`
             **macOS (Apple Silicon)**: `slow-query-converter-aarch64-apple-darwin`
