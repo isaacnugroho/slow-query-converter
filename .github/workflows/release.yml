@@ -93,8 +93,8 @@ jobs:
           for artifact_dir in slow-query-converter-*; do
             if [ -d "$artifact_dir" ]; then
               echo "Processing directory: $artifact_dir"
-              # Find any file in the directory (should be the binary)
-              binary_file=$(find "$artifact_dir" -type f | head -1)
+              # Find the binary file (exclude .sha256 files)
+              binary_file=$(find "$artifact_dir" -type f ! -name "*.sha256" | head -1)
               echo "Found binary file: $binary_file"
               
               if [ -f "$binary_file" ]; then
@@ -134,8 +134,8 @@ jobs:
               # Extract target from directory name
               target=$(basename "$artifact_dir")
               
-              # Find any file in the directory (should be the binary)
-              binary_file=$(find "$artifact_dir" -type f | head -1)
+              # Find the binary file (exclude .sha256 files)
+              binary_file=$(find "$artifact_dir" -type f ! -name "*.sha256" | head -1)
               
               if [ -f "$binary_file" ]; then
                 # Copy binary
