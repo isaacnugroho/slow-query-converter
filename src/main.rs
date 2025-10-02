@@ -92,14 +92,14 @@ impl SlowQueryEntry {
         if let Some(mat) = RE_SET_TIMESTAMP_EXTRACT.find(&remaining_query) {
             let before = &remaining_query[..mat.start()];
             let after = &remaining_query[mat.end()..];
-            remaining_query = format!("{}{}", before, after);
+            remaining_query = format!("{before}{after}");
         }
 
         // Remove USE schema statement if found
         if let Some(mat) = RE_USE_SCHEMA_EXTRACT.find(&remaining_query) {
             let before = &remaining_query[..mat.start()];
             let after = &remaining_query[mat.end()..];
-            remaining_query = format!("{}{}", before, after);
+            remaining_query = format!("{before}{after}");
         }
 
         // Process remaining query: single pass with minimal allocations
@@ -115,7 +115,7 @@ impl SlowQueryEntry {
             }
         }
 
-        wtr.write_record(&[
+        wtr.write_record([
             &self.time,
             &self.user,
             &self.host,
@@ -196,7 +196,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .from_writer(writer);
 
     // Write the updated header row to the CSV file.
-    wtr.write_record(&[
+    wtr.write_record([
         "time",
         "user",
         "host",
@@ -279,7 +279,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     wtr.flush()?;
 
     if !is_stdout {
-        eprintln!("\nSuccess! Converted {} slow query entries.", entry_count);
+        eprintln!("\nSuccess! Converted {entry_count} slow query entries.");
     }
 
     Ok(())
