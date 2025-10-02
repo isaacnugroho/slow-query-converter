@@ -88,14 +88,29 @@ jobs:
       - name: Create checksums
         run: |
           cd artifacts
+          echo "=== Creating Checksums ==="
           # Find all binary files in artifact directories
           for artifact_dir in slow-query-converter-*; do
             if [ -d "$artifact_dir" ]; then
-              # Find the binary file in the artifact directory
-              binary_file=$(find "$artifact_dir" -type f -name "slow-query-converter*" | head -1)
+              echo "Processing directory: $artifact_dir"
+              # Find any file in the directory (should be the binary)
+              binary_file=$(find "$artifact_dir" -type f | head -1)
+              echo "Found binary file: $binary_file"
+              
               if [ -f "$binary_file" ]; then
                 sha256sum "$binary_file" > "$binary_file.sha256"
-                echo "Created checksum for: $binary_file"
+                echo "✅ Created checksum for: $binary_file"
+                
+                # Verify the checksum file was created
+                if [ -f "$binary_file.sha256" ]; then
+                  echo "✅ Checksum file verified"
+                else
+                  echo "❌ Checksum file not created"
+                fi
+              else
+                echo "❌ No binary file found in $artifact_dir"
+                echo "Directory contents:"
+                ls -la "$artifact_dir"
               fi
             fi
           done
@@ -119,8 +134,8 @@ jobs:
               # Extract target from directory name
               target=$(basename "$artifact_dir")
               
-              # Find the binary file in the artifact directory
-              binary_file=$(find "$artifact_dir" -type f -name "slow-query-converter*" | head -1)
+              # Find any file in the directory (should be the binary)
+              binary_file=$(find "$artifact_dir" -type f | head -1)
               
               if [ -f "$binary_file" ]; then
                 # Copy binary

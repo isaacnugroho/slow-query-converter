@@ -81,12 +81,31 @@ jobs:
       - name: Create checksums
         run: |
           cd artifacts
+          echo "=== Creating Checksums ==="
           for artifact_dir in slow-query-converter-*; do
             if [ -d "$artifact_dir" ]; then
-              binary_file=$(find "$artifact_dir" -type f -name "slow-query-converter*" | head -1)
+              echo "Processing directory: $artifact_dir"
+              
+              # Find any file in the directory (should be the binary)
+              binary_file=$(find "$artifact_dir" -type f | head -1)
+              echo "Found binary file: $binary_file"
+              
               if [ -f "$binary_file" ]; then
                 sha256sum "$binary_file" > "$binary_file.sha256"
-                echo "Created checksum for: $binary_file"
+                echo "✅ Created checksum for: $binary_file"
+                echo "Checksum file: $binary_file.sha256"
+                
+                # Verify the checksum file was created
+                if [ -f "$binary_file.sha256" ]; then
+                  echo "✅ Checksum file verified"
+                  cat "$binary_file.sha256"
+                else
+                  echo "❌ Checksum file not created"
+                fi
+              else
+                echo "❌ No binary file found in $artifact_dir"
+                echo "Directory contents:"
+                ls -la "$artifact_dir"
               fi
             fi
           done
@@ -100,11 +119,22 @@ jobs:
           echo "All artifact directories:"
           find artifacts -type d -name "slow-query-converter-*"
           echo ""
+          echo "All files in artifact directories:"
+          for dir in artifacts/slow-query-converter-*; do
+            if [ -d "$dir" ]; then
+              echo "Directory: $dir"
+              ls -la "$dir"
+            fi
+          done
+          echo ""
           echo "All binary files:"
           find artifacts -type f -name "*slow-query-converter*"
           echo ""
+          echo "All files (including .exe):"
+          find artifacts -type f
+          echo ""
           echo "File sizes:"
-          find artifacts -type f -name "*slow-query-converter*" -exec ls -la {} \;
+          find artifacts -type f -exec ls -la {} \;
 
       - name: Prepare release files
         run: |
@@ -117,7 +147,8 @@ jobs:
               echo "Processing artifact directory: $artifact_dir"
               echo "Target name: $target"
               
-              binary_file=$(find "$artifact_dir" -type f -name "slow-query-converter*" | head -1)
+              # Find any file in the directory (should be the binary)
+              binary_file=$(find "$artifact_dir" -type f | head -1)
               echo "Found binary: $binary_file"
               
               if [ -f "$binary_file" ]; then
