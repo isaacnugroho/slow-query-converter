@@ -1,4 +1,4 @@
-# MariaDB Slow Query to CSV Converter v0.1.0
+# MariaDB Slow Query to CSV Converter v0.2.0
 
 ## 🚀 Release Notes
 
@@ -55,6 +55,14 @@ https://github.com/isaacnugroho/slow-query-converter
 
 ### 📝 Changelog
 
+#### v0.2.0
+- Version bump to 0.2.0
+- Updated dependencies and build configuration
+- Enhanced CI/CD workflows for Windows and Linux
+- Added comprehensive integration tests
+- Fixed clippy warnings and code quality improvements
+
+#### v0.1.0
 - Initial release with performance optimizations
 - Support for MariaDB slow query log format
 - CSV output with proper multiline query handling
