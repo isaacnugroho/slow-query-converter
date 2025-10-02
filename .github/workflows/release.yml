@@ -88,9 +88,15 @@ jobs:
       - name: Create checksums
         run: |
           cd artifacts
-          for file in */slow-query-converter*; do
-            if [ -f "$file" ]; then
-              sha256sum "$file" > "$file.sha256"
+          # Find all binary files in artifact directories
+          for artifact_dir in slow-query-converter-*; do
+            if [ -d "$artifact_dir" ]; then
+              # Find the binary file in the artifact directory
+              binary_file=$(find "$artifact_dir" -type f -name "slow-query-converter*" | head -1)
+              if [ -f "$binary_file" ]; then
+                sha256sum "$binary_file" > "$binary_file.sha256"
+                echo "Created checksum for: $binary_file"
+              fi
             fi
           done
 
@@ -100,9 +106,43 @@ jobs:
           find artifacts -type f -name "*slow-query-converter*" | head -20
           echo "File sizes:"
           ls -la artifacts/*/slow-query-converter* 2>/dev/null || echo "No files found"
+          
+      - name: Prepare release files
+        run: |
+          # Create a clean release directory
+          mkdir -p release-files
+          
+          # Copy and rename files for better organization
+          # The artifacts are organized as: artifacts/artifact-name/binary-file
+          for artifact_dir in artifacts/slow-query-converter-*; do
+            if [ -d "$artifact_dir" ]; then
+              # Extract target from directory name
+              target=$(basename "$artifact_dir")
+              
+              # Find the binary file in the artifact directory
+              binary_file=$(find "$artifact_dir" -type f -name "slow-query-converter*" | head -1)
+              
+              if [ -f "$binary_file" ]; then
+                # Copy binary
+                cp "$binary_file" "release-files/${target}"
+                
+                # Copy checksum if exists
+                if [ -f "${binary_file}.sha256" ]; then
+                  cp "${binary_file}.sha256" "release-files/${target}.sha256"
+                fi
+                
+                echo "Copied: $binary_file -> release-files/${target}"
+              else
+                echo "Warning: No binary found in $artifact_dir"
+              fi
+            fi
+          done
+          
+          echo "Release files prepared:"
+          ls -la release-files/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2.0.1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: MariaDB Slow Query to CSV Converter ${{ github.ref_name }}
@@ -149,10 +189,10 @@ jobs:
             - All binaries include SHA256 checksums for verification
             - Use `sha256sum -c *.sha256` to verify integrity
           files: |
-            artifacts/*/slow-query-converter*
-            artifacts/*/slow-query-converter*.sha256
+            release-files/slow-query-converter-*
           draft: false
           prerelease: false
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
