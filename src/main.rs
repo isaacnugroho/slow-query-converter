@@ -38,6 +38,12 @@ static RE_SET_TIMESTAMP_EXTRACT: Lazy<Regex> =
 static RE_USE_SCHEMA_EXTRACT: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)\s*use `?\w+`?;\s*").unwrap());
 
+// Regex to find skipped lines.
+// The `(?i)` flag makes the match case-insensitive.
+static RE_SKIPPED_1: Lazy<Regex> = Lazy::new(|| Regex::new(r"started with:\s*$").unwrap());
+static RE_SKIPPED_2: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^((Tcp port:)|(Time\s+Id\s+Command))").unwrap());
+
 /// Represents a single entry from the slow query log.
 #[derive(Debug, Default, Clone)]
 struct SlowQueryEntry {
@@ -214,6 +220,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for line_result in reader.lines() {
         let line = line_result?;
+
+        if RE_SKIPPED_1.is_match(&line) || RE_SKIPPED_2.is_match(&line) {
+            continue;
+        }
 
         if let Some(caps) = RE_TIME.captures(&line) {
             let raw_time = caps.get(1).map_or("", |m| m.as_str()).trim();
