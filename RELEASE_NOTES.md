@@ -56,11 +56,9 @@ https://github.com/isaacnugroho/slow-query-converter
 ### 📝 Changelog
 
 #### v0.2.0
-- Version bump to 0.2.0
-- Updated dependencies and build configuration
-- Enhanced CI/CD workflows for Windows and Linux
-- Added comprehensive integration tests
+- Added excluding server start info lines
 - Fixed clippy warnings and code quality improvements
+- Updated release notes with changelog
 
 #### v0.1.0
 - Initial release with performance optimizations
