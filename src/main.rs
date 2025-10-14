@@ -21,7 +21,7 @@ static RE_TIME: Lazy<Regex> = Lazy::new(|| Regex::new(r"^# Time: (.*)").unwrap()
 static RE_USER_HOST: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^# User@Host: (.*?) @\s*(.*)").unwrap());
 static RE_METADATA_1: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^# Thread_id: (\d+)\s+Schema: (.*?)\s+QC_hit: (.*)").unwrap());
+    Lazy::new(|| Regex::new(r"^# Thread_id: (\d+)\s+Schema: (.*?)\s+QC_hit: (\S+)").unwrap());
 static RE_METADATA_2: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r"^# Query_time: ([\d.]+)\s+Lock_time: ([\d.]+)\s+Rows_sent: (\d+)\s+Rows_examined: (\d+)",
@@ -30,6 +30,21 @@ static RE_METADATA_2: Lazy<Regex> = Lazy::new(|| {
 });
 static RE_METADATA_3: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^# Rows_affected: (\d+)\s+Bytes_sent: (\d+)").unwrap());
+static RE_METADATA_4: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^# Tmp_tables: (\d+)\s+Tmp_disk_tables: (\d+)\s+Tmp_table_sizes: (\d+)").unwrap()
+});
+static RE_METADATA_5: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^# Full_scan: (\S+)\s+Full_join: (\S+)\s+Tmp_table: (\S+)\s+Tmp_table_on_disk: (\S+)",
+    )
+    .unwrap()
+});
+static RE_METADATA_6: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^# Filesort: (\S+)\s+Filesort_on_disk: (\S+)\s+Merge_passes: (\d+)\s+Priority_queue: (\S+)",
+    )
+    .unwrap()
+});
 
 // Regex to find and extract specific statements from the query body.
 // The `(?i)` flag makes the match case-insensitive.
@@ -59,8 +74,18 @@ struct SlowQueryEntry {
     rows_examined: u64,
     rows_affected: u64,
     bytes_sent: u64,
-    // This will hold the raw, multi-line query text.
     query: String,
+    tmp_tables: u64,
+    tmp_disk_tables: u64,
+    tmp_table_sizes: u64,
+    full_scan: String,
+    full_join: String,
+    tmp_table: String,
+    tmp_table_on_disk: String,
+    filesort: String,
+    filesort_on_disk: String,
+    merge_passes: u64,
+    priority_queue: String,
 }
 
 impl SlowQueryEntry {
@@ -85,7 +110,7 @@ impl SlowQueryEntry {
         };
 
         // 3. Process the query: extract remaining content after removing extracted statements
-        let mut single_line_query = String::with_capacity(query.len());
+        // let mut single_line_query = String::with_capacity(query.len());
         let mut remaining_query = query.to_string();
 
         // Remove SET timestamp statement if found
@@ -103,17 +128,17 @@ impl SlowQueryEntry {
         }
 
         // Process remaining query: single pass with minimal allocations
-        let mut first = true;
-        for line in remaining_query.lines() {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() {
-                if !first {
-                    single_line_query.push(' ');
-                }
-                single_line_query.push_str(trimmed);
-                first = false;
-            }
-        }
+        // let mut first = true;
+        // for line in remaining_query.lines() {
+        //     let trimmed = line.trim();
+        //     if !trimmed.is_empty() {
+        //         if !first {
+        //             single_line_query.push(' ');
+        //         }
+        //         single_line_query.push_str(trimmed);
+        //         first = false;
+        //     }
+        // }
 
         wtr.write_record([
             &self.time,
@@ -122,17 +147,26 @@ impl SlowQueryEntry {
             &self.thread_id,
             &self.schema,
             &self.qc_hit,
-            // Add the new, extracted columns
             &set_timestamp_str,
             &use_schema_str,
-            &single_line_query,
-            // Numeric columns
+            &remaining_query,
             &self.query_time.to_string(),
             &self.lock_time.to_string(),
             &self.rows_sent.to_string(),
             &self.rows_examined.to_string(),
             &self.rows_affected.to_string(),
             &self.bytes_sent.to_string(),
+            &self.tmp_tables.to_string(),
+            &self.tmp_disk_tables.to_string(),
+            &self.tmp_table_sizes.to_string(),
+            &self.full_scan,
+            &self.full_join,
+            &self.tmp_table,
+            &self.tmp_table_on_disk,
+            &self.filesort,
+            &self.filesort_on_disk,
+            &self.merge_passes.to_string(),
+            &self.priority_queue,
         ])?;
         Ok(())
     }
@@ -212,6 +246,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         "rows_examined",
         "rows_affected",
         "bytes_sent",
+        "tmp_tables",
+        "tmp_disk_tables",
+        "tmp_table_sizes",
+        "full_scan",
+        "full_join",
+        "tmp_table",
+        "tmp_table_on_disk",
+        "filesort",
+        "filesort_on_disk",
+        "merge_passes",
+        "priority_queue",
     ])?;
 
     let mut current_entry = SlowQueryEntry::default();
@@ -261,6 +306,25 @@ fn main() -> Result<(), Box<dyn Error>> {
             current_entry.rows_affected =
                 caps.get(1).map_or(0, |m| m.as_str().parse().unwrap_or(0));
             current_entry.bytes_sent = caps.get(2).map_or(0, |m| m.as_str().parse().unwrap_or(0));
+        } else if let Some(caps) = RE_METADATA_4.captures(&line) {
+            current_entry.tmp_tables = caps.get(1).map_or(0, |m| m.as_str().parse().unwrap_or(0));
+            current_entry.tmp_disk_tables =
+                caps.get(2).map_or(0, |m| m.as_str().parse().unwrap_or(0));
+            current_entry.tmp_table_sizes =
+                caps.get(3).map_or(0, |m| m.as_str().parse().unwrap_or(0));
+        } else if let Some(caps) = RE_METADATA_5.captures(&line) {
+            current_entry.full_scan = caps.get(1).map_or("", |m| m.as_str()).trim().to_string();
+            current_entry.full_join = caps.get(2).map_or("", |m| m.as_str()).trim().to_string();
+            current_entry.tmp_table = caps.get(3).map_or("", |m| m.as_str()).trim().to_string();
+            current_entry.tmp_table_on_disk =
+                caps.get(4).map_or("", |m| m.as_str()).trim().to_string();
+        } else if let Some(caps) = RE_METADATA_6.captures(&line) {
+            current_entry.filesort = caps.get(1).map_or("", |m| m.as_str()).trim().to_string();
+            current_entry.filesort_on_disk =
+                caps.get(2).map_or("", |m| m.as_str()).trim().to_string();
+            current_entry.merge_passes = caps.get(3).map_or(0, |m| m.as_str().parse().unwrap_or(0));
+            current_entry.priority_queue =
+                caps.get(4).map_or("", |m| m.as_str()).trim().to_string();
         } else if !line.starts_with('#') && !line.trim().is_empty() {
             // Pre-allocate capacity for better performance
             if current_entry.query.is_empty() {
@@ -279,7 +343,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     wtr.flush()?;
 
     if !is_stdout {
-        eprintln!("\nSuccess! Converted {entry_count} slow query entries.");
+        eprintln!(
+            "\nSuccess! Converted {entry_count} slow query entri
+        es."
+        );
     }
 
     Ok(())
