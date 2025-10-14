@@ -207,11 +207,7 @@ fn format_log_time(log_time: &str) -> Result<String, chrono::ParseError> {
 /// Main function to orchestrate the file reading, parsing, and writing.
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let is_stdout = args.output.is_none();
-
-    if !is_stdout {
-        eprintln!("Starting conversion...");
-    }
+    eprintln!("Starting conversion...");
     eprintln!("Input file: {}", args.input.display());
 
     let writer: Box<dyn Write> = match args.output {
@@ -342,12 +338,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     wtr.flush()?;
 
-    if !is_stdout {
-        eprintln!(
-            "\nSuccess! Converted {entry_count} slow query entri
-        es."
-        );
-    }
+    eprintln!("\nSuccess! Converted {entry_count} slow query entries.");
 
     Ok(())
 }
