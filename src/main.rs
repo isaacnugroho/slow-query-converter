@@ -281,12 +281,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ..Default::default()
             };
         } else if let Some(caps) = RE_USER_HOST.captures(&line) {
-            let user_full = caps.get(1).map_or("", |m| m.as_str()).trim();
-            current_entry.user = user_full.split('[').next().unwrap_or("").to_string();
-            let host_full = caps.get(2).map_or("", |m| m.as_str()).trim();
-            current_entry.host = host_full
-                .trim_matches(|c| c == '[' || c == ']' || c == ' ')
-                .to_string();
+            current_entry.user = caps.get(1).map_or("", |m| m.as_str()).trim().to_string();
+            current_entry.host = caps.get(2).map_or("", |m| m.as_str()).trim().to_string();
         } else if let Some(caps) = RE_METADATA_1.captures(&line) {
             current_entry.thread_id = caps.get(1).map_or("", |m| m.as_str()).to_string();
             current_entry.schema = caps.get(2).map_or("", |m| m.as_str()).trim().to_string();
