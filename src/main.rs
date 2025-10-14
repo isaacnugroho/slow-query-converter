@@ -45,6 +45,7 @@ static RE_METADATA_6: Lazy<Regex> = Lazy::new(|| {
     )
     .unwrap()
 });
+static RE_METADATA_7: Lazy<Regex> = Lazy::new(|| Regex::new(r"^# explain: (.*)").unwrap());
 
 // Regex to find and extract specific statements from the query body.
 // The `(?i)` flag makes the match case-insensitive.
@@ -86,6 +87,7 @@ struct SlowQueryEntry {
     filesort_on_disk: String,
     merge_passes: u64,
     priority_queue: String,
+    explain: String,
 }
 
 impl SlowQueryEntry {
@@ -167,6 +169,7 @@ impl SlowQueryEntry {
             &self.filesort_on_disk,
             &self.merge_passes.to_string(),
             &self.priority_queue,
+            &self.explain,
         ])?;
         Ok(())
     }
@@ -253,10 +256,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         "filesort_on_disk",
         "merge_passes",
         "priority_queue",
+        "explain",
     ])?;
 
     let mut current_entry = SlowQueryEntry::default();
-    let mut last_seen_time = String::new();
     let mut entry_count = 0;
 
     for line_result in reader.lines() {
@@ -267,17 +270,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         if let Some(caps) = RE_TIME.captures(&line) {
-            let raw_time = caps.get(1).map_or("", |m| m.as_str()).trim();
-            last_seen_time = format_log_time(raw_time).unwrap_or_else(|_| raw_time.to_string());
-        } else if let Some(caps) = RE_USER_HOST.captures(&line) {
             if current_entry.is_valid() {
                 current_entry.write_to_csv(&mut wtr)?;
                 entry_count += 1;
             }
+            let raw_time = caps.get(1).map_or("", |m| m.as_str()).trim();
+            let last_seen_time = format_log_time(raw_time).unwrap_or_else(|_| raw_time.to_string());
             current_entry = SlowQueryEntry {
                 time: last_seen_time.clone(),
                 ..Default::default()
             };
+        } else if let Some(caps) = RE_USER_HOST.captures(&line) {
             let user_full = caps.get(1).map_or("", |m| m.as_str()).trim();
             current_entry.user = user_full.split('[').next().unwrap_or("").to_string();
             let host_full = caps.get(2).map_or("", |m| m.as_str()).trim();
@@ -321,13 +324,28 @@ fn main() -> Result<(), Box<dyn Error>> {
             current_entry.merge_passes = caps.get(3).map_or(0, |m| m.as_str().parse().unwrap_or(0));
             current_entry.priority_queue =
                 caps.get(4).map_or("", |m| m.as_str()).trim().to_string();
+        } else if let Some(caps) = RE_METADATA_7.captures(&line) {
+            let values_str = caps.get(1).unwrap().as_str();
+            let explain = values_str
+                .split('\t')
+                .collect::<Vec<&str>>()
+                .join("|")
+                .trim()
+                .to_string();
+            if current_entry.explain.is_empty() {
+                current_entry.explain.reserve(explain.len() + 1);
+            } else {
+                current_entry.explain.push('\n');
+            }
+            current_entry.explain.push_str(&explain);
         } else if !line.starts_with('#') && !line.trim().is_empty() {
             // Pre-allocate capacity for better performance
             if current_entry.query.is_empty() {
                 current_entry.query.reserve(line.len() + 1);
+            } else {
+                current_entry.query.push('\n');
             }
             current_entry.query.push_str(&line);
-            current_entry.query.push('\n');
         }
     }
 
