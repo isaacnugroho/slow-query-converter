@@ -55,6 +55,11 @@ https://github.com/isaacnugroho/slow-query-converter
 
 ### 📝 Changelog
 
+#### v0.3.0
+- Include explain rows if defined
+- use full user and host
+- Use `Time:` as start of new log
+
 #### v0.2.0
 - Added excluding server start info lines
 - Fixed clippy warnings and code quality improvements
